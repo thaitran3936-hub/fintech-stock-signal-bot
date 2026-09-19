@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Local database
+*.db
+
+# Generated local data
+data/history_failed_symbols.csv
+# Environment variables
+.env
+*.env
