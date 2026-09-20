@@ -1,0 +1,398 @@
+{
+    "GVT": [
+        {
+            "level": "INFO",
+            "code": "REVENUE_ROW",
+            "period": null,
+            "message": "income_statement: có 2 dòng revenue ['3. Doanh thu thuần về bán hàng và cung cấp dịch vụ', '1. Doanh thu bán hàng và cung cấp dịch vụ']. Chọn '3. Doanh thu thuần về bán hàng và cung cấp dịch vụ' theo từ khoá 'doanh thu thuần'."
+        },
+        {
+            "level": "INFO",
+            "code": "PERIOD_LIMIT",
+            "period": null,
+            "message": "income_statement chỉ trả 4 kỳ (2017-Q1, 2017-Q2, 2017-Q3, 2018-Q2). Community Edition giới hạn 4 kỳ -> eps_growth_yoy theo quý thường không tính được."
+        },
+        {
+            "level": "INFO",
+            "code": "QOQ_NO_PREVIOUS",
+            "period": "2017-Q1",
+            "message": "không có 2016-Q4 -> eps_growth_qoq = null."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2017-Q1",
+            "message": "API không trả 2016-Q1 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2017-Q2",
+            "message": "API không trả 2016-Q2 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2017-Q3",
+            "message": "API không trả 2016-Q3 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "QOQ_NO_PREVIOUS",
+            "period": "2018-Q2",
+            "message": "không có 2018-Q1 -> eps_growth_qoq = null."
+        },
+        {
+            "level": "WARNING",
+            "code": "INCOME_PERIODS_REVERSED",
+            "period": null,
+            "message": "[quarter] profit/revenue KHÔNG khớp net_margin theo nhãn (0/4) nhưng khớp khi ghép ĐẢO NGƯỢC (4/4). Nhãn kỳ của income_statement(quarter) nhiều khả năng bị đảo. Không dùng EPS/revenue từ nguồn này cho kỳ đó. 2017-Q1: tính 2.09 vs ratio 1.01, 2017-Q2: tính 0.39 vs ratio 1.39, 2017-Q3: tính 1.39 vs ratio 0.39, 2018-Q2: tính 1.01 vs ratio 2.09"
+        },
+        {
+            "level": "WARNING",
+            "code": "QUARTER_EPS_ALL_NULL",
+            "period": null,
+            "message": "Có cột quý nhưng toàn bộ EPS = null -> chuyển sang dữ liệu năm."
+        },
+        {
+            "level": "WARNING",
+            "code": "ANNUAL_EPS_CONFLICT",
+            "period": null,
+            "message": "EPS năm từ ratio(year) và income_statement(year) không cùng một hệ số scale: 2022-Năm=1370.1x, 2023-Năm=2344.5x, 2024-Năm=426.5x, 2025-Năm=729.6x. Ít nhất một nguồn gán nhãn năm sai kỳ. Đang dùng ANNUAL_EPS_SOURCE='ratio'."
+        },
+        {
+            "level": "INFO",
+            "code": "ANNUAL_EPS_FROM_RATIO",
+            "period": null,
+            "message": "EPS năm lấy từ ratio(year). Hàng này có thể là trailing_eps; tại thời điểm chốt năm trailing 4 quý = EPS cả năm, và nó khớp kỳ với PE/PB/ROE (xem check_implied_price)."
+        },
+        {
+            "level": "INFO",
+            "code": "REVENUE_ROW",
+            "period": null,
+            "message": "income_statement(year): có 2 dòng revenue ['3. Doanh thu thuần về bán hàng và cung cấp dịch vụ', '1. Doanh thu bán hàng và cung cấp dịch vụ']. Chọn '3. Doanh thu thuần về bán hàng và cung cấp dịch vụ' theo từ khoá 'doanh thu thuần'."
+        },
+        {
+            "level": "WARNING",
+            "code": "INCOME_PERIODS_REVERSED",
+            "period": null,
+            "message": "[year] profit/revenue KHÔNG khớp net_margin theo nhãn (0/4) nhưng khớp khi ghép ĐẢO NGƯỢC (4/4). Nhãn kỳ của income_statement(year) nhiều khả năng bị đảo. Không dùng EPS/revenue từ nguồn này cho kỳ đó. 2022-Năm: tính 9.77 vs ratio 7.08, 2023-Năm: tính 6.18 vs ratio 2.88, 2024-Năm: tính 2.88 vs ratio 6.18, 2025-Năm: tính 7.08 vs ratio 9.77"
+        }
+    ],
+    "MGC": [
+        {
+            "level": "INFO",
+            "code": "EMPTY_DATAFRAME",
+            "period": null,
+            "message": "income_statement({'period': 'quarter'}) trả DataFrame rỗng."
+        },
+        {
+            "level": "INFO",
+            "code": "EMPTY_DATAFRAME",
+            "period": null,
+            "message": "ratio({'period': 'quarter'}) trả DataFrame rỗng."
+        },
+        {
+            "level": "WARNING",
+            "code": "ANNUAL_EPS_CONFLICT",
+            "period": null,
+            "message": "EPS năm từ ratio(year) và income_statement(year) không cùng một hệ số scale: 2022-Năm=1356.8x, 2023-Năm=541.3x, 2024-Năm=1852.3x, 2025-Năm=517.4x. Ít nhất một nguồn gán nhãn năm sai kỳ. Đang dùng ANNUAL_EPS_SOURCE='ratio'."
+        },
+        {
+            "level": "INFO",
+            "code": "ANNUAL_EPS_FROM_RATIO",
+            "period": null,
+            "message": "EPS năm lấy từ ratio(year). Hàng này có thể là trailing_eps; tại thời điểm chốt năm trailing 4 quý = EPS cả năm, và nó khớp kỳ với PE/PB/ROE (xem check_implied_price)."
+        },
+        {
+            "level": "INFO",
+            "code": "REVENUE_ROW",
+            "period": null,
+            "message": "income_statement(year): có 2 dòng revenue ['3. Doanh thu thuần về bán hàng và cung cấp dịch vụ', '1. Doanh thu bán hàng và cung cấp dịch vụ']. Chọn '3. Doanh thu thuần về bán hàng và cung cấp dịch vụ' theo từ khoá 'doanh thu thuần'."
+        },
+        {
+            "level": "WARNING",
+            "code": "INCOME_PERIODS_REVERSED",
+            "period": null,
+            "message": "[year] profit/revenue KHÔNG khớp net_margin theo nhãn (0/4) nhưng khớp khi ghép ĐẢO NGƯỢC (4/4). Nhãn kỳ của income_statement(year) nhiều khả năng bị đảo. Không dùng EPS/revenue từ nguồn này cho kỳ đó. 2022-Năm: tính 1.70 vs ratio 1.62, 2023-Năm: tính 0.94 vs ratio 1.64, 2024-Năm: tính 1.64 vs ratio 0.94, 2025-Năm: tính 1.62 vs ratio 1.70"
+        },
+        {
+            "level": "WARNING",
+            "code": "UNIT_INCONSISTENCY",
+            "period": null,
+            "message": "net_margin: kỳ ['2024-Năm'] có |giá trị| < 1 trong khi kỳ ['2022-Năm', '2023-Năm', '2025-Năm'] có |giá trị| >= 1. Có thể KBS trả khác unit (0.94 = 0.94% hay 94%?). KHÔNG tự scale. Hãy kiểm tra raw bằng --debug-raw."
+        }
+    ],
+    "SLD": [
+        {
+            "level": "WARNING",
+            "code": "DUPLICATE_COLUMN_CONFLICT",
+            "period": "2025-Q4",
+            "message": "ratio: cột 2025-Q4_1 KHÁC cột chính 2025-Q4. Chỉ dùng 2025-Q4. Cần kiểm tra raw KBS."
+        },
+        {
+            "level": "INFO",
+            "code": "REVENUE_ROW",
+            "period": null,
+            "message": "income_statement: có 2 dòng revenue ['3. Doanh thu thuần về bán hàng và cung cấp dịch vụ', '1. Doanh thu bán hàng và cung cấp dịch vụ']. Chọn '3. Doanh thu thuần về bán hàng và cung cấp dịch vụ' theo từ khoá 'doanh thu thuần'."
+        },
+        {
+            "level": "INFO",
+            "code": "PERIOD_LIMIT",
+            "period": null,
+            "message": "income_statement chỉ trả 4 kỳ (2025-Q3, 2025-Q4, 2026-Q1, 2026-Q2). Community Edition giới hạn 4 kỳ -> eps_growth_yoy theo quý thường không tính được."
+        },
+        {
+            "level": "INFO",
+            "code": "RATIO_PERIOD_MISSING",
+            "period": "2025-Q3",
+            "message": "ratio() không có kỳ này -> pe/pb/roe/debt_equity/net_margin = null. KHÔNG lấy từ kỳ khác."
+        },
+        {
+            "level": "INFO",
+            "code": "QOQ_NO_PREVIOUS",
+            "period": "2025-Q3",
+            "message": "không có 2025-Q2 -> eps_growth_qoq = null."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2025-Q3",
+            "message": "API không trả 2024-Q3 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "GROWTH_SIGN_CHANGE",
+            "period": "2025-Q4",
+            "message": "eps đổi dấu (4000.0 -> -61000.0), growth -1625.0% tính đúng công thức nhưng khó diễn giải về mặt kinh tế."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2025-Q4",
+            "message": "API không trả 2024-Q4 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "WARNING",
+            "code": "SUSPICIOUS_PE",
+            "period": "2025-Q4",
+            "message": "pe = 0. KBS có thể đang trả placeholder thay vì giá trị thật. Giữ nguyên raw."
+        },
+        {
+            "level": "WARNING",
+            "code": "SUSPICIOUS_PB",
+            "period": "2025-Q4",
+            "message": "pb = 0. Kiểm tra raw KBS."
+        },
+        {
+            "level": "INFO",
+            "code": "GROWTH_SIGN_CHANGE",
+            "period": "2026-Q1",
+            "message": "eps đổi dấu (-61000.0 -> 3000.0), growth 104.92% tính đúng công thức nhưng khó diễn giải về mặt kinh tế."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2026-Q1",
+            "message": "API không trả 2025-Q1 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "WARNING",
+            "code": "SUSPICIOUS_PE",
+            "period": "2026-Q1",
+            "message": "pe = 1059.48 rất cao (EPS gần 0?). Giữ nguyên raw."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2026-Q2",
+            "message": "API không trả 2025-Q2 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "WARNING",
+            "code": "SUSPICIOUS_PE",
+            "period": "2026-Q2",
+            "message": "pe = 1150.61 rất cao (EPS gần 0?). Giữ nguyên raw."
+        }
+    ],
+    "SWC": [
+        {
+            "level": "WARNING",
+            "code": "DUPLICATE_COLUMN_CONFLICT",
+            "period": "2025-Q4",
+            "message": "ratio: cột 2025-Q4_1 KHÁC cột chính 2025-Q4. Chỉ dùng 2025-Q4. Cần kiểm tra raw KBS."
+        },
+        {
+            "level": "INFO",
+            "code": "REVENUE_ROW",
+            "period": null,
+            "message": "income_statement: có 2 dòng revenue ['3. Doanh thu thuần về bán hàng và cung cấp dịch vụ', '1. Doanh thu bán hàng và cung cấp dịch vụ']. Chọn '3. Doanh thu thuần về bán hàng và cung cấp dịch vụ' theo từ khoá 'doanh thu thuần'."
+        },
+        {
+            "level": "INFO",
+            "code": "PERIOD_LIMIT",
+            "period": null,
+            "message": "income_statement chỉ trả 4 kỳ (2025-Q3, 2025-Q4, 2026-Q1, 2026-Q2). Community Edition giới hạn 4 kỳ -> eps_growth_yoy theo quý thường không tính được."
+        },
+        {
+            "level": "INFO",
+            "code": "RATIO_PERIOD_MISSING",
+            "period": "2025-Q3",
+            "message": "ratio() không có kỳ này -> pe/pb/roe/debt_equity/net_margin = null. KHÔNG lấy từ kỳ khác."
+        },
+        {
+            "level": "INFO",
+            "code": "QOQ_NO_PREVIOUS",
+            "period": "2025-Q3",
+            "message": "không có 2025-Q2 -> eps_growth_qoq = null."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2025-Q3",
+            "message": "API không trả 2024-Q3 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2025-Q4",
+            "message": "API không trả 2024-Q4 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2026-Q1",
+            "message": "API không trả 2025-Q1 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2026-Q2",
+            "message": "API không trả 2025-Q2 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "PERIOD_ALIGNMENT_OK",
+            "period": null,
+            "message": "[quarter] profit/revenue khớp net_margin ở 3/3 kỳ -> nhãn kỳ của income_statement và ratio nhất quán."
+        }
+    ],
+    "VID": [
+        {
+            "level": "WARNING",
+            "code": "DUPLICATE_COLUMN_CONFLICT",
+            "period": "2025-Q4",
+            "message": "ratio: cột 2025-Q4_1 KHÁC cột chính 2025-Q4. Chỉ dùng 2025-Q4. Cần kiểm tra raw KBS."
+        },
+        {
+            "level": "INFO",
+            "code": "REVENUE_ROW",
+            "period": null,
+            "message": "income_statement: có 2 dòng revenue ['3. Doanh thu thuần về bán hàng và cung cấp dịch vụ', '1. Doanh thu bán hàng và cung cấp dịch vụ']. Chọn '3. Doanh thu thuần về bán hàng và cung cấp dịch vụ' theo từ khoá 'doanh thu thuần'."
+        },
+        {
+            "level": "INFO",
+            "code": "PERIOD_LIMIT",
+            "period": null,
+            "message": "income_statement chỉ trả 4 kỳ (2025-Q3, 2025-Q4, 2026-Q1, 2026-Q2). Community Edition giới hạn 4 kỳ -> eps_growth_yoy theo quý thường không tính được."
+        },
+        {
+            "level": "INFO",
+            "code": "RATIO_PERIOD_MISSING",
+            "period": "2025-Q3",
+            "message": "ratio() không có kỳ này -> pe/pb/roe/debt_equity/net_margin = null. KHÔNG lấy từ kỳ khác."
+        },
+        {
+            "level": "INFO",
+            "code": "QOQ_NO_PREVIOUS",
+            "period": "2025-Q3",
+            "message": "không có 2025-Q2 -> eps_growth_qoq = null."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2025-Q3",
+            "message": "API không trả 2024-Q3 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "GROWTH_SIGN_CHANGE",
+            "period": "2025-Q4",
+            "message": "eps đổi dấu (-179000.0 -> 3000.0), growth 101.68% tính đúng công thức nhưng khó diễn giải về mặt kinh tế."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2025-Q4",
+            "message": "API không trả 2024-Q4 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "GROWTH_SIGN_CHANGE",
+            "period": "2026-Q1",
+            "message": "eps đổi dấu (3000.0 -> -88000.0), growth -3033.33% tính đúng công thức nhưng khó diễn giải về mặt kinh tế."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2026-Q1",
+            "message": "API không trả 2025-Q1 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "INFO",
+            "code": "GROWTH_SIGN_CHANGE",
+            "period": "2026-Q2",
+            "message": "eps đổi dấu (-88000.0 -> 197000.0), growth 323.86% tính đúng công thức nhưng khó diễn giải về mặt kinh tế."
+        },
+        {
+            "level": "INFO",
+            "code": "YOY_NO_SAME_QUARTER",
+            "period": "2026-Q2",
+            "message": "API không trả 2025-Q2 -> eps_growth_yoy = null (null hợp lệ)."
+        },
+        {
+            "level": "WARNING",
+            "code": "MARGIN_MISMATCH",
+            "period": null,
+            "message": "[quarter] profit/revenue không khớp net_margin của ratio (1/3 kỳ) và cũng không khớp khi đảo ngược. Có thể khác định nghĩa doanh thu hoặc khác kỳ. 2025-Q4: tính 0.06 vs ratio 0.10, 2026-Q1: tính -1.15 vs ratio -1.31, 2026-Q2: tính 2.44 vs ratio 2.62"
+        }
+    ],
+    "SDA": [
+        {
+            "level": "WARNING",
+            "code": "SUSPICIOUS_PE",
+            "period": "2025-Q4",
+            "message": "pe = 508.81 cao."
+        }
+    ],
+    "PEG": [
+        {
+            "level": "WARNING",
+            "code": "SUSPICIOUS_PE",
+            "period": "2026-Q1",
+            "message": "pe = 5093.48 cao."
+        }
+    ],
+    "BHC": [
+        {
+            "level": "WARNING",
+            "code": "SUSPICIOUS_PE",
+            "period": "2024-Q3",
+            "message": "pe = 995.89 cao."
+        },
+        {
+            "level": "WARNING",
+            "code": "SUSPICIOUS_PE",
+            "period": "2024-Q4",
+            "message": "pe = 769.55 cao."
+        }
+    ],
+    "SCR": [
+        {
+            "level": "WARNING",
+            "code": "SUSPICIOUS_PE",
+            "period": "2025-Q4",
+            "message": "pe = 600.05 cao."
+        }
+    ]
+}
