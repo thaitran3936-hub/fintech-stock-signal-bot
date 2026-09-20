@@ -34,12 +34,13 @@ MIN_QUARTER_GROWTH = 15.0           # LN ròng quý gần nhất tăng > 15%
 QUARTER_GROWTH_BASIS = "yoy"        # "yoy": so với CÙNG KỲ năm trước (đúng bản BT3 đầu, cần 6 quý)
                                     # "qoq": so với quý liền trước (chỉ cần 3 quý, dễ nhiễu do mùa vụ)
 REQUIRE_ACCELERATION = True         # tăng trưởng quý này > tăng trưởng quý trước (Delta Growth)
+REQUIRE_QUARTER_GROWTH = False      # tạm tắt: financial_data.json chưa có net_profit_q1..q6
 MIN_ANNUAL_PROFIT_GROWTH = 15.0     # LN ròng năm gần nhất tăng > 15%
 MIN_ANNUAL_REVENUE_GROWTH = 15.0    # Doanh thu năm gần nhất tăng > 15%
-REQUIRE_REVENUE_GROWTH = True       # bản BT3 đầu: "Doanh thu/Lợi nhuận năm > 15%" -> giữ cả doanh thu
+REQUIRE_REVENUE_GROWTH = False      # tạm tắt: chưa có revenue_y1..y3
 REQUIRE_POSITIVE_3Y_PROFIT = True   # LN ròng dương liên tục 3 năm gần nhất
-REQUIRE_POSITIVE_CFO = True         # tăng trưởng phải đi kèm dòng tiền HĐKD dương
-MIN_FREE_FLOAT_PCT = 10.0           # loại cổ phiếu quá cô đặc (free float < 10%)
+REQUIRE_POSITIVE_CFO = False        # tạm tắt: chưa có cfo
+MIN_FREE_FLOAT_PCT = 0.0            # tạm tắt: chưa có free_float_pct
 BANK_EXEMPT_DEBT_EQUITY = False     # False = áp D/E < 1.2 cho mọi mã (đúng văn bản). True = miễn cho ngân hàng
 STRICT_PRIORITY_SECTOR = False      # False: ngành ưu tiên chỉ được xếp trên (văn bản ghi "Ưu tiên")
 
@@ -253,11 +254,13 @@ def fa_filter_debt_equity(df: pd.DataFrame) -> pd.Series:
 
 
 def fa_filter_growth_quarter(df: pd.DataFrame) -> pd.Series:
+    if not REQUIRE_QUARTER_GROWTH:
+        return _all_true(df)
     return df["eps_growth_qoq"] > MIN_QUARTER_GROWTH
 
 
 def fa_filter_acceleration(df: pd.DataFrame) -> pd.Series:
-    if not REQUIRE_ACCELERATION:
+    if not REQUIRE_ACCELERATION or not REQUIRE_QUARTER_GROWTH:
         return _all_true(df)
     return df["eps_growth_qoq"] > df["eps_growth_qoq_prev"]
 
