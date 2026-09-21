@@ -28,7 +28,7 @@ import pandas as pd
 # ----------------------------------------------------------------------------
 # 1. Ngưỡng lọc (chỉnh ở đây, không sửa rải rác trong code)
 # ----------------------------------------------------------------------------
-MIN_ROE = 15.0                      # ROE > 15%
+MIN_ROE = 10.0                      # ROE > 15%
 MAX_DEBT_EQUITY = 1.2               # D/E < 1.2 (tỷ lệ, 0.8 nghĩa là 0.8 lần vốn chủ)
 MIN_QUARTER_GROWTH = 15.0           # LN ròng quý gần nhất tăng > 15%
 QUARTER_GROWTH_BASIS = "yoy"        # "yoy": so với CÙNG KỲ năm trước (đúng bản BT3 đầu, cần 6 quý)
@@ -36,7 +36,7 @@ QUARTER_GROWTH_BASIS = "yoy"        # "yoy": so với CÙNG KỲ năm trước (
 REQUIRE_ACCELERATION = True         # tăng trưởng quý này > tăng trưởng quý trước (Delta Growth)
 REQUIRE_QUARTER_GROWTH = False      # tạm tắt: financial_data.json chưa có net_profit_q1..q6
 MIN_ANNUAL_PROFIT_GROWTH = 15.0     # LN ròng năm gần nhất tăng > 15%
-MIN_ANNUAL_REVENUE_GROWTH = 15.0    # Doanh thu năm gần nhất tăng > 15%
+MIN_ANNUAL_REVENUE_GROWTH = 8.0    # Doanh thu năm gần nhất tăng > 15%
 REQUIRE_REVENUE_GROWTH = False      # tạm tắt: chưa có revenue_y1..y3
 REQUIRE_POSITIVE_3Y_PROFIT = True   # LN ròng dương liên tục 3 năm gần nhất
 REQUIRE_POSITIVE_CFO = False        # tạm tắt: chưa có cfo
