@@ -28,7 +28,7 @@ import pandas as pd
 # ----------------------------------------------------------------------------
 # 1. Ngưỡng lọc (chỉnh ở đây, không sửa rải rác trong code)
 # ----------------------------------------------------------------------------
-MIN_ROE = 10.0                      # ROE > 15%
+MIN_ROE = 10.0                      # ROE > 10%
 MAX_DEBT_EQUITY = 1.2               # D/E < 1.2 (tỷ lệ, 0.8 nghĩa là 0.8 lần vốn chủ)
 MIN_QUARTER_GROWTH = 15.0           # LN ròng quý gần nhất tăng > 15%
 QUARTER_GROWTH_BASIS = "yoy"        # "yoy": so với CÙNG KỲ năm trước (đúng bản BT3 đầu, cần 6 quý)
@@ -37,10 +37,10 @@ REQUIRE_ACCELERATION = True         # tăng trưởng quý này > tăng trưởn
 REQUIRE_QUARTER_GROWTH = False      # tạm tắt: financial_data.json chưa có net_profit_q1..q6
 MIN_ANNUAL_PROFIT_GROWTH = 15.0     # LN ròng năm gần nhất tăng > 15%
 MIN_ANNUAL_REVENUE_GROWTH = 8.0    # Doanh thu năm gần nhất tăng > 15%
-REQUIRE_REVENUE_GROWTH = False      # tạm tắt: chưa có revenue_y1..y3
+REQUIRE_REVENUE_GROWTH = True       # 1007/1523 ma da co du lieu doanh thu nam
 REQUIRE_POSITIVE_3Y_PROFIT = True   # LN ròng dương liên tục 3 năm gần nhất
-REQUIRE_POSITIVE_CFO = False        # tạm tắt: chưa có cfo
-MIN_FREE_FLOAT_PCT = 0.0            # tạm tắt: chưa có free_float_pct
+REQUIRE_POSITIVE_CFO = True        # tạm bật: chưa có cfo
+MIN_FREE_FLOAT_PCT = 10.0           # 1523/1523 ma da co du free_float_pct
 BANK_EXEMPT_DEBT_EQUITY = False     # False = áp D/E < 1.2 cho mọi mã (đúng văn bản). True = miễn cho ngân hàng
 STRICT_PRIORITY_SECTOR = False      # False: ngành ưu tiên chỉ được xếp trên (văn bản ghi "Ưu tiên")
 
@@ -317,7 +317,7 @@ def _q_cols_accel() -> list:
 
 # Danh sách tiêu chí: (tên hiển thị, các cột DỮ LIỆU GỐC phải có, hàm lọc)
 FA_CRITERIA = [
-    ("ROE > 15%", ["roe"], fa_filter_roe),
+    ("ROE > 10%", ["roe"], fa_filter_roe),
     ("D/E < 1.2", ["debt_equity"], fa_filter_debt_equity),
     ("LN quý gần nhất > 15%", _q_cols, fa_filter_growth_quarter),
     ("Tăng tốc so với quý trước", _q_cols_accel, fa_filter_acceleration),
