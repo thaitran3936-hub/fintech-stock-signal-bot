@@ -1,60 +1,119 @@
-from failover import FailoverManager
+from stock_bot.data_pipeline.failover_manager import FailoverManager
 
 
-print("========================================")
-print("        TEST FAILOVER MANAGER")
-print("========================================")
+def main():
+
+    print("==========================================")
+    print("          TEST FAILOVER MANAGER")
+    print("==========================================")
+
+    manager = FailoverManager(
+        failure_threshold=3,
+        recovery_threshold=2
+    )
+
+    # ========================================================
+    # 1. BAN ĐẦU
+    # ========================================================
+
+    print("\n[TEST 1] Nguồn ban đầu")
+
+    print(
+        "Nguồn:",
+        manager.get_current_source()
+    )
+
+    # ========================================================
+    # 2. VIETCAP HOẠT ĐỘNG
+    # ========================================================
+
+    print("\n[TEST 2] Vietcap hoạt động")
+
+    manager.record_vietcap_success()
+
+    print(
+        "Nguồn:",
+        manager.get_current_source()
+    )
+
+    # ========================================================
+    # 3. GIẢ LẬP VIETCAP LỖI 3 LẦN
+    # ========================================================
+
+    print("\n[TEST 3] Vietcap lỗi")
+
+    for i in range(3):
+
+        manager.record_vietcap_failure()
+
+    print(
+        "Nguồn sau khi Vietcap lỗi:",
+        manager.get_current_source()
+    )
+
+    # ========================================================
+    # 4. TEST DNSE
+    # ========================================================
+
+    print("\n[TEST 4] Lấy ACB từ DNSE")
+
+    data = manager.get_dnse_data("ACB")
+
+    if data:
+
+        print("✅ DNSE hoạt động")
+
+        print(data)
+
+    else:
+
+        print("❌ DNSE không trả dữ liệu")
+
+    # ========================================================
+    # 5. GIẢ LẬP VIETCAP QUAY LẠI
+    # ========================================================
+
+    print("\n[TEST 5] Vietcap hoạt động lại")
+
+    manager.record_vietcap_success()
+
+    print(
+        "Nguồn:",
+        manager.get_current_source()
+    )
+
+    manager.record_vietcap_success()
+
+    print(
+        "Nguồn:",
+        manager.get_current_source()
+    )
+
+    # ========================================================
+    # 6. STATUS
+    # ========================================================
+
+    print("\n[TEST 6] STATUS")
+
+    print(manager.status())
 
 
-manager = FailoverManager()
+if __name__ == "__main__":
+    main()
+print("\n[TEST 7] Vietcap OFFLINE → Failover")
 
+manager = FailoverManager(
+    failure_threshold=1,
+    recovery_threshold=2
+)
 
-print("\n===== TRẠNG THÁI BAN ĐẦU =====")
+manager.handle_vietcap_connection(False)
 
-print(manager.status())
+print("Nguồn hiện tại:", manager.get_current_source())
 
+print("\n[TEST 8] Vietcap ONLINE → Recovery")
 
-print("\n===== VIETCAP HOẠT ĐỘNG =====")
+manager.handle_vietcap_connection(True)
+manager.handle_vietcap_connection(True)
 
-manager.update_health("vietcap", True)
-
-print("Nguồn đang dùng:", manager.get_active_source())
-
-
-print("\n===== VIETCAP MẤT KẾT NỐI =====")
-
-manager.update_health("vietcap", False)
-
-print("Nguồn đang dùng:", manager.get_active_source())
-
-
-print("\n===== DNSE HOẠT ĐỘNG =====")
-
-manager.update_health("dnse", True)
-
-print("Nguồn đang dùng:", manager.get_active_source())
-
-
-print("\n===== VIETCAP HOẠT ĐỘNG LẠI =====")
-
-manager.update_health("vietcap", True)
-
-print("Nguồn đang dùng:", manager.get_active_source())
-
-
-print("\n===== CẢ HAI NGUỒN MẤT =====")
-
-manager.update_health("vietcap", False)
-manager.update_health("dnse", False)
-
-print("Nguồn đang dùng:", manager.get_active_source())
-
-
-print("\n===== TRẠNG THÁI CUỐI =====")
-
-print(manager.status())
-
-
-print("\n========================================")
-print("        TEST FAILOVER HOÀN TẤT")
-print("========================================")
+print("Nguồn hiện tại:", manager.get_current_source())

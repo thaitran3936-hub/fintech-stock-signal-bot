@@ -1,9 +1,8 @@
-
+import csv
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
-import time
-
-import pandas as pd
+from zoneinfo import ZoneInfo
 
 from stock_bot.data_pipeline.collectors.historical_collector import (
     HistoricalCollector
@@ -15,178 +14,295 @@ from stock_bot.data_pipeline.storage.historical_store import (
 
 class HistoricalUpdater:
 
-    def __init__(self):
+    # =========================================================
+    # 48 MÃ KHÔNG HOẠT ĐỘNG
+    # =========================================================
 
-        self.collector = HistoricalCollector()
-        self.store = HistoricalStore()
+    INACTIVE_SYMBOLS = {
+        "ART", "BCV", "BHG", "BT6", "CMK", "CMP",
+        "CNA", "CPH", "DAG", "EGL", "FBC", "GTT",
+        "HHN", "HLA", "HLT", "HNR", "HSA", "ITA",
+        "KTT", "MBN", "MES", "MHL", "MTB", "NDF",
+        "NSS", "PID", "PPI", "PQN", "SD8", "SJF",
+        "SVH", "TBW", "TGG", "TKA", "TNA", "TQW",
+        "TTB", "TTZ", "UMC", "UTT", "VCE", "VDB",
+        "VLP", "VMA", "VPW", "VTM", "VXP", "X77"
+    }
 
-        # ==================================================
-        # GIỚI HẠN API
-        # ==================================================
+    # Múi giờ Việt Nam
+    TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 
-        # 4 giây / request
-        # ≈ 15 requests / phút
-        # thấp hơn giới hạn 20 requests / phút
-        self.sleep_seconds = 4
+    def __init__(
+        self,
+        db_path="data/market_data.db",
+        symbols_path="data/symbols.csv",
+        start_date="2025-01-01",
+        request_delay=4,
+        max_retry=3
+    ):
 
-        # Khi API báo vượt giới hạn
-        self.rate_limit_wait = 60
+        self.db_path = db_path
+        self.symbols_path = symbols_path
+        self.start_date = start_date
+        self.request_delay = request_delay
+        self.max_retry = max_retry
 
-        # Số lần thử lại khi gặp rate limit
-        self.max_retry = 3
-
-        # Danh sách mã bị lỗi
-        self.failed_symbols = []
-
-    # ======================================================
-    # KIỂM TRA CÓ PHẢI CUỐI TUẦN KHÔNG
-    # ======================================================
-
-    def is_weekend(self):
-
-        today = datetime.now()
-
-        # Monday = 0
-        # Tuesday = 1
-        # Wednesday = 2
-        # Thursday = 3
-        # Friday = 4
-        # Saturday = 5
-        # Sunday = 6
-
-        return today.weekday() >= 5
-
-    # ======================================================
-    # KIỂM TRA CÓ PHẢI LỖI RATE LIMIT KHÔNG
-    # ======================================================
-
-    def is_rate_limit_error(self, error):
-
-        message = str(error).lower()
-
-        keywords = [
-            "rate limit",
-            "request limit",
-            "maximum api request",
-            "20 requests",
-            "too many requests",
-            "429",
-            "wait to retry",
-            "giới hạn tối đa số lượt yêu cầu",
-            "vượt giới hạn"
-        ]
-
-        return any(
-            keyword in message
-            for keyword in keywords
+        self.collector = HistoricalCollector(
+            source="KBS"
         )
 
-    # ======================================================
-    # CẬP NHẬT 1 MÃ
-    # ======================================================
+        self.store = HistoricalStore(
+            db_path=self.db_path
+        )
 
-    def update_symbol(self, symbol):
+        self.failed_symbols = []
+
+    # =========================================================
+    # THỜI GIAN VIỆT NAM
+    # =========================================================
+
+    @classmethod
+    def now_vietnam(cls):
+
+        return datetime.now(
+            cls.TIMEZONE
+        )
+
+    # =========================================================
+    # KIỂM TRA CÓ NÊN CẬP NHẬT LỊCH SỬ HAY KHÔNG
+    # =========================================================
+
+    @classmethod
+    def get_last_completed_trading_date(cls):
+
+        now = cls.now_vietnam()
+
+        # -----------------------------------------------------
+        # Thứ 7 / Chủ nhật
+        # -----------------------------------------------------
+
+        if now.weekday() == 5:
+            return (
+                now.date()
+                - timedelta(days=1)
+            )
+
+        if now.weekday() == 6:
+            return (
+                now.date()
+                - timedelta(days=2)
+            )
+
+        # -----------------------------------------------------
+        # Trước 15:15
+        #
+        # Phiên hiện tại chưa chắc đã hoàn tất.
+        # Không lấy ngày hôm nay.
+        # -----------------------------------------------------
+
+        if (
+            now.hour < 15
+            or (
+                now.hour == 15
+                and now.minute < 15
+            )
+        ):
+
+            previous_day = (
+                now.date()
+                - timedelta(days=1)
+            )
+
+        else:
+
+            # Sau 15:15 có thể cập nhật phiên hôm nay
+            previous_day = now.date()
+
+        # -----------------------------------------------------
+        # Nếu rơi vào cuối tuần thì lùi tiếp
+        # -----------------------------------------------------
+
+        while previous_day.weekday() >= 5:
+
+            previous_day -= timedelta(days=1)
+
+        return previous_day
+
+    # =========================================================
+    # KIỂM TRA THỜI ĐIỂM HIỆN TẠI
+    # =========================================================
+
+    @classmethod
+    def can_update_history(cls):
+
+        now = cls.now_vietnam()
+
+        # Thứ 7 / Chủ nhật
+        if now.weekday() >= 5:
+            return False
+
+        # Chỉ cập nhật sau khi phiên đã kết thúc
+        if now.hour < 15:
+            return False
+
+        if now.hour == 15 and now.minute < 15:
+            return False
+
+        return True
+
+    # =========================================================
+    # ĐỌC DANH SÁCH MÃ
+    # =========================================================
+
+    def load_symbols(self):
+
+        symbols = []
+
+        path = Path(
+            self.symbols_path
+        )
+
+        if not path.exists():
+
+            print(
+                f"[HISTORY] Không tìm thấy: {path}"
+            )
+
+            return symbols
+
+        with open(
+            path,
+            "r",
+            encoding="utf-8-sig",
+            newline=""
+        ) as file:
+
+            reader = csv.DictReader(file)
+
+            for row in reader:
+
+                symbol = row.get("symbol")
+
+                if not symbol:
+                    continue
+
+                symbol = symbol.strip().upper()
+
+                if not symbol:
+                    continue
+
+                # Bỏ qua mã inactive
+                if symbol in self.INACTIVE_SYMBOLS:
+                    continue
+
+                symbols.append(symbol)
+
+        symbols = sorted(
+            set(symbols)
+        )
+
+        print(
+            f"[HISTORY] Mã hoạt động cần kiểm tra: "
+            f"{len(symbols)}"
+        )
+
+        print(
+            f"[HISTORY] Bỏ qua inactive: "
+            f"{len(self.INACTIVE_SYMBOLS)}"
+        )
+
+        return symbols
+
+    # =========================================================
+    # KIỂM TRA 1 MÃ CÓ THIẾU DỮ LIỆU KHÔNG
+    # =========================================================
+
+    def needs_update(
+        self,
+        symbol,
+        target_date
+    ):
+
+        last_date = self.store.get_last_date(
+            symbol
+        )
+
+        # Chưa có lịch sử
+        if not last_date:
+            return True
+
+        return str(last_date) < target_date.isoformat()
+
+    # =========================================================
+    # CẬP NHẬT 1 MÃ
+    # =========================================================
+
+    def update_symbol(
+        self,
+        symbol,
+        target_date
+    ):
 
         symbol = symbol.upper()
 
-        print(
-            f"\n===== CẬP NHẬT {symbol} ====="
-        )
-
         try:
-
-            # ==================================================
-            # KIỂM TRA CUỐI TUẦN
-            # ==================================================
-
-            if self.is_weekend():
-
-                print(
-                    f"[UPDATE] {symbol}: "
-                    f"hôm nay là cuối tuần, "
-                    f"thị trường không giao dịch."
-                )
-
-                return True
-
-            # ==================================================
-            # KIỂM TRA DATABASE
-            # ==================================================
 
             last_date = self.store.get_last_date(
                 symbol
             )
 
-            # ==================================================
-            # MÃ CHƯA CÓ DỮ LIỆU
-            # ==================================================
+            # -------------------------------------------------
+            # Chưa có dữ liệu
+            # -------------------------------------------------
 
-            if last_date is None:
+            if not last_date:
 
-                print(
-                    f"[UPDATE] {symbol}: "
-                    f"chưa có dữ liệu lịch sử."
-                )
+                start = self.start_date
 
-                start_date = "2025-01-01"
-
-                end_date = datetime.now().strftime(
-                    "%Y-%m-%d"
-                )
-
-                print(
-                    f"[UPDATE] Tải lịch sử ban đầu:"
-                    f"\n  Từ: {start_date}"
-                    f"\n  Đến: {end_date}"
-                )
-
-            # ==================================================
-            # MÃ ĐÃ CÓ DỮ LIỆU
-            # ==================================================
+            # -------------------------------------------------
+            # Đã có dữ liệu
+            # Chỉ lấy phần còn thiếu
+            # -------------------------------------------------
 
             else:
 
-                print(
-                    f"[UPDATE] {symbol}: "
-                    f"ngày cuối trong DB = {last_date}"
-                )
-
-                start_date = (
-                    datetime.strptime(
-                        last_date,
-                        "%Y-%m-%d"
-                    )
-                    + timedelta(days=1)
-                ).strftime("%Y-%m-%d")
-
-                end_date = datetime.now().strftime(
+                last_date_obj = datetime.strptime(
+                    str(last_date),
                     "%Y-%m-%d"
-                )
+                ).date()
 
-                # ==========================================
-                # ĐÃ CẬP NHẬT TỚI HÔM NAY
-                # ==========================================
+                start = (
+                    last_date_obj
+                    + timedelta(days=1)
+                ).isoformat()
 
-                if start_date > end_date:
+            end = target_date.isoformat()
 
-                    print(
-                        f"[UPDATE] {symbol}: "
-                        f"đã cập nhật tới hôm nay."
-                    )
+            # -------------------------------------------------
+            # Đã cập nhật đủ
+            # -------------------------------------------------
 
-                    return True
+            if start > end:
 
                 print(
-                    f"[UPDATE] Lấy dữ liệu mới:"
-                    f"\n  Từ: {start_date}"
-                    f"\n  Đến: {end_date}"
+                    f"[SKIP] {symbol}: "
+                    f"đã có dữ liệu đến {last_date}"
                 )
 
-            # ==================================================
-            # THỬ GỌI API
-            # ==================================================
+                return "skipped"
 
-            for attempt in range(
+            print(
+                f"[HISTORY] {symbol}: "
+                f"{start} → {end}"
+            )
+
+            # -------------------------------------------------
+            # Gọi KBS
+            # -------------------------------------------------
+
+            df = None
+
+            for retry in range(
                 1,
                 self.max_retry + 1
             ):
@@ -195,234 +311,141 @@ class HistoricalUpdater:
 
                     df = self.collector.get_history(
                         symbol=symbol,
-                        start=start_date,
-                        end=end_date
+                        start=start,
+                        end=end
                     )
 
-                    # ==========================================
-                    # KHÔNG CÓ DỮ LIỆU
-                    # ==========================================
-
-                    if df is None or df.empty:
-
-                        print(
-                            f"[UPDATE] {symbol}: "
-                            f"không có dữ liệu mới."
-                        )
-
-                        return True
-
-                    # ==========================================
-                    # LƯU SQLITE
-                    # ==========================================
-
-                    saved = self.store.save(
-                        df
-                    )
-
-                    print(
-                        f"[UPDATE] {symbol}: "
-                        f"đã lưu/thêm {saved} dòng."
-                    )
-
-                    return True
+                    break
 
                 except Exception as e:
 
-                    # ==========================================
-                    # RATE LIMIT
-                    # ==========================================
+                    print(
+                        f"[RETRY] {symbol}: "
+                        f"lần {retry}/"
+                        f"{self.max_retry}"
+                    )
 
-                    if self.is_rate_limit_error(e):
-
-                        print(
-                            f"[RATE LIMIT] {symbol}: "
-                            f"đã vượt giới hạn API."
-                        )
-
-                        print(
-                            f"[RATE LIMIT] "
-                            f"Chờ {self.rate_limit_wait} giây..."
-                        )
-
-                        time.sleep(
-                            self.rate_limit_wait
-                        )
-
-                        print(
-                            f"[RATE LIMIT] "
-                            f"Thử lại {symbol} "
-                            f"({attempt}/{self.max_retry})..."
-                        )
-
-                        continue
-
-                    # ==========================================
-                    # LỖI KHÁC
-                    # ==========================================
+                    if retry >= self.max_retry:
+                        raise
 
                     print(
-                        f"[UPDATE ERROR] "
-                        f"{symbol}: {e}"
+                        "[RATE LIMIT] "
+                        "Chờ 60 giây..."
                     )
 
-                    self.failed_symbols.append(
-                        symbol
-                    )
+                    time.sleep(60)
 
-                    return False
+            # -------------------------------------------------
+            # Không có dữ liệu mới
+            # -------------------------------------------------
 
-            # ==================================================
-            # ĐÃ THỬ LẠI NHƯNG VẪN RATE LIMIT
-            # ==================================================
+            if df is None or df.empty:
+
+                print(
+                    f"[NO NEW DATA] {symbol}"
+                )
+
+                return "no_data"
+
+            # -------------------------------------------------
+            # Lưu SQLite
+            # UNIQUE(symbol, date) sẽ chống trùng
+            # -------------------------------------------------
+
+            self.store.save(df)
 
             print(
-                f"[UPDATE ERROR] {symbol}: "
-                f"vượt giới hạn API sau "
-                f"{self.max_retry} lần thử."
+                f"[UPDATED] {symbol}: "
+                f"thêm {len(df)} dòng."
+            )
+
+            return "updated"
+
+        except Exception as e:
+
+            print(
+                f"[FAILED] {symbol}: {e}"
             )
 
             self.failed_symbols.append(
                 symbol
             )
 
-            return False
+            return "failed"
 
-        except Exception as e:
+    # =========================================================
+    # CHẠY CẬP NHẬT
+    # =========================================================
 
-            print(
-                f"[UPDATE ERROR] "
-                f"{symbol}: {e}"
-            )
+    def run(self):
 
-            self.failed_symbols.append(
-                symbol
-            )
+        print()
+        print("=" * 70)
+        print("       AUTOMATIC HISTORICAL UPDATE")
+        print("=" * 70)
 
-            return False
+        now = self.now_vietnam()
 
-    # ======================================================
-    # CẬP NHẬT TOÀN BỘ MÃ
-    # ======================================================
-
-    def update_all(self):
-
-        # ==================================================
-        # ĐƯỜNG DẪN DANH SÁCH MÃ
-        # ==================================================
-
-        symbols_path = Path(
-            "data/symbols.csv"
+        print(
+            f"[HISTORY] Thời gian VN: "
+            f"{now.strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        if not symbols_path.exists():
+        # -----------------------------------------------------
+        # Không cập nhật trong giờ giao dịch
+        # -----------------------------------------------------
+
+        if not self.can_update_history():
 
             print(
-                "[UPDATE ERROR] "
-                "Không tìm thấy data/symbols.csv"
+                "[HISTORY] Chưa đến thời điểm "
+                "cập nhật lịch sử."
+            )
+
+            print(
+                "[HISTORY] Realtime vẫn tiếp tục "
+                "hoạt động bình thường."
             )
 
             return
 
-        # ==================================================
-        # ĐỌC DANH SÁCH MÃ
-        # ==================================================
+        # -----------------------------------------------------
+        # Xác định phiên cuối cùng cần cập nhật
+        # -----------------------------------------------------
 
-        try:
-
-            df_symbols = pd.read_csv(
-                symbols_path
-            )
-
-        except Exception as e:
-
-            print(
-                f"[UPDATE ERROR] "
-                f"Không đọc được symbols.csv: {e}"
-            )
-
-            return
-
-        # ==================================================
-        # KIỂM TRA CỘT SYMBOL
-        # ==================================================
-
-        if "symbol" not in df_symbols.columns:
-
-            print(
-                "[UPDATE ERROR] "
-                "File symbols.csv không có cột symbol."
-            )
-
-            return
-
-        # ==================================================
-        # CHUẨN HÓA DANH SÁCH
-        # ==================================================
-
-        symbols = (
-            df_symbols["symbol"]
-            .dropna()
-            .astype(str)
-            .str.strip()
-            .str.upper()
-            .drop_duplicates()
-            .tolist()
+        target_date = (
+            self.get_last_completed_trading_date()
         )
+
+        print(
+            f"[HISTORY] Phiên cuối cần kiểm tra: "
+            f"{target_date}"
+        )
+
+        # -----------------------------------------------------
+        # Đọc mã
+        # -----------------------------------------------------
+
+        symbols = self.load_symbols()
+
+        if not symbols:
+
+            print(
+                "[HISTORY] Không có mã hoạt động."
+            )
+
+            return
 
         total = len(symbols)
 
-        print(
-            "\n=========================================="
-        )
+        updated_count = 0
+        skipped_count = 0
+        no_data_count = 0
+        failed_count = 0
 
-        print(
-            "[UPDATE] BẮT ĐẦU CẬP NHẬT LỊCH SỬ"
-        )
-
-        print(
-            f"[UPDATE] Tổng số mã: {total}"
-        )
-
-        print(
-            f"[UPDATE] Nghỉ giữa mỗi mã: "
-            f"{self.sleep_seconds} giây"
-        )
-
-        # ==================================================
-        # KIỂM TRA CUỐI TUẦN TRƯỚC KHI CHẠY TOÀN BỘ
-        # ==================================================
-
-        if self.is_weekend():
-
-            print(
-                "[UPDATE] Hôm nay là cuối tuần."
-            )
-
-            print(
-                "[UPDATE] Thị trường không giao dịch."
-            )
-
-            print(
-                "[UPDATE] Không gọi API."
-            )
-
-            print(
-                "=========================================="
-            )
-
-            return
-
-        print(
-            "=========================================="
-        )
-
-        success = 0
-        failed = 0
-
-        # ==================================================
-        # CẬP NHẬT TỪNG MÃ
-        # ==================================================
+        # -----------------------------------------------------
+        # Duyệt danh sách
+        # -----------------------------------------------------
 
         for index, symbol in enumerate(
             symbols,
@@ -430,114 +453,140 @@ class HistoricalUpdater:
         ):
 
             print(
-                f"\n[{index}/{total}]"
+                f"\n[{index}/{total}] {symbol}"
             )
 
-            result = self.update_symbol(
-                symbol
-            )
+            # -------------------------------------------------
+            # Kiểm tra DB trước
+            # -------------------------------------------------
 
-            if result:
-
-                success += 1
-
-            else:
-
-                failed += 1
-
-            # ==================================================
-            # NGHỈ GIỮA CÁC REQUEST
-            # ==================================================
-
-            if index < total:
+            if not self.needs_update(
+                symbol,
+                target_date
+            ):
 
                 print(
-                    f"[UPDATE] Nghỉ "
-                    f"{self.sleep_seconds} giây..."
+                    f"[SKIP] {symbol}: "
+                    f"đã đủ dữ liệu."
                 )
+
+                skipped_count += 1
+
+                continue
+
+            # -------------------------------------------------
+            # Chỉ mã thiếu mới gọi API
+            # -------------------------------------------------
+
+            result = self.update_symbol(
+                symbol,
+                target_date
+            )
+
+            if result == "updated":
+
+                updated_count += 1
+
+            elif result == "skipped":
+
+                skipped_count += 1
+
+            elif result == "no_data":
+
+                no_data_count += 1
+
+            elif result == "failed":
+
+                failed_count += 1
+
+            # -------------------------------------------------
+            # Nghỉ giữa các request
+            # -------------------------------------------------
+
+            if result == "updated":
 
                 time.sleep(
-                    self.sleep_seconds
+                    self.request_delay
                 )
 
-        # ==================================================
-        # LƯU DANH SÁCH MÃ LỖI
-        # ==================================================
+        # =====================================================
+        # LƯU DANH SÁCH LỖI
+        # =====================================================
 
         if self.failed_symbols:
 
-            failed_path = Path(
-                "data/history_failed_symbols.csv"
+            failed_path = (
+                Path("data")
+                / "history_failed_symbols.csv"
             )
 
-            failed_df = pd.DataFrame(
-                {
-                    "symbol": self.failed_symbols
-                }
-            )
-
-            failed_df.drop_duplicates(
-                inplace=True
-            )
-
-            failed_df.to_csv(
+            with open(
                 failed_path,
-                index=False
-            )
+                "w",
+                encoding="utf-8",
+                newline=""
+            ) as file:
+
+                writer = csv.writer(file)
+
+                writer.writerow(
+                    ["symbol"]
+                )
+
+                for symbol in self.failed_symbols:
+
+                    writer.writerow(
+                        [symbol]
+                    )
 
             print(
-                f"\n[UPDATE] Đã lưu danh sách "
-                f"{len(failed_df)} mã lỗi:"
+                f"\n[HISTORY] "
+                f"Có {len(self.failed_symbols)} mã lỗi."
             )
 
-            print(
-                f"         {failed_path}"
-            )
-
-        # ==================================================
+        # =====================================================
         # TỔNG KẾT
-        # ==================================================
+        # =====================================================
+
+        print()
+        print("=" * 70)
+        print("       HISTORICAL UPDATE FINISHED")
+        print("=" * 70)
 
         print(
-            "\n=========================================="
+            f"Tổng mã hoạt động : {total}"
         )
 
         print(
-            "[UPDATE] HOÀN THÀNH"
+            f"Đã cập nhật       : {updated_count}"
         )
 
         print(
-            f"[UPDATE] Tổng số mã: {total}"
+            f"Đã đủ dữ liệu     : {skipped_count}"
         )
 
         print(
-            f"[UPDATE] Thành công: {success}"
+            f"Không có dữ liệu  : {no_data_count}"
         )
 
         print(
-            f"[UPDATE] Lỗi: {failed}"
+            f"Lỗi               : {failed_count}"
         )
 
-        print(
-            "=========================================="
-        )
+        print("=" * 70)
 
-    # ======================================================
+    # =========================================================
     # ĐÓNG
-    # ======================================================
+    # =========================================================
 
     def close(self):
 
         self.store.close()
 
-        print(
-            "[UPDATE] HistoricalUpdater đã đóng."
-        )
 
-
-# ==========================================================
-# MAIN
-# ==========================================================
+# =============================================================
+# CHẠY ĐỘC LẬP
+# =============================================================
 
 if __name__ == "__main__":
 
@@ -545,15 +594,8 @@ if __name__ == "__main__":
 
     try:
 
-        updater.update_all()
-
-    except KeyboardInterrupt:
-
-        print(
-            "\n[UPDATE] Người dùng dừng chương trình."
-        )
+        updater.run()
 
     finally:
 
         updater.close()
-

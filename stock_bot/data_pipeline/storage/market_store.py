@@ -1,3 +1,4 @@
+
 import sqlite3
 import threading
 from datetime import datetime
@@ -6,7 +7,10 @@ from pathlib import Path
 
 class MarketStore:
 
-    def __init__(self, db_path="data/market_data.db"):
+    def __init__(
+        self,
+        db_path="data/market_data.db"
+    ):
 
         self.db_path = db_path
 
@@ -22,49 +26,16 @@ class MarketStore:
 
         self.cursor = self.conn.cursor()
 
-        # Khóa để tránh nhiều thread
-        # cùng lúc sửa dữ liệu
         self.lock = threading.Lock()
 
-        # ==========================================
-        # LƯU DỮ LIỆU MỚI NHẤT TRONG RAM
-        # ==========================================
-
+        # Cache dữ liệu mới nhất của từng mã
         self.latest = {}
-
-        # Hàng đợi dữ liệu chờ ghi xuống SQLite
-        self.queue = []
-
-        # ==========================================
-        # TỰ ĐỘNG FLUSH
-        # ==========================================
-
-        # Cứ 3 giây ghi queue xuống SQLite
-        self.flush_interval = 3
-
-        # Trạng thái của thread tự động flush
-        self.flush_running = True
-
-        # ==========================================
-        # TẠO DATABASE
-        # ==========================================
 
         self._create_database()
 
-        # ==========================================
-        # TẠO THREAD TỰ ĐỘNG FLUSH
-        # ==========================================
-
-        self.flush_thread = threading.Thread(
-            target=self._auto_flush,
-            daemon=True
-        )
-
-        self.flush_thread.start()
-
-    # =========================================================
-    # 1. TẠO DATABASE
-    # =========================================================
+    # =====================================================
+    # TẠO DATABASE
+    # =====================================================
 
     def _create_database(self):
 
@@ -83,13 +54,11 @@ class MarketStore:
                 )
             """)
 
-            # Index giúp tìm dữ liệu theo mã nhanh hơn
             self.cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_market_symbol
                 ON market_data(symbol)
             """)
 
-            # Index giúp tìm dữ liệu theo thời gian nhanh hơn
             self.cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_market_timestamp
                 ON market_data(timestamp)
@@ -97,9 +66,9 @@ class MarketStore:
 
             self.conn.commit()
 
-    # =========================================================
-    # 2. THÊM DỮ LIỆU VÀO RAM
-    # =========================================================
+    # =====================================================
+    # LƯU / CẬP NHẬT DỮ LIỆU
+    # =====================================================
 
     def save(
         self,
@@ -108,154 +77,148 @@ class MarketStore:
         volume=None,
         bid=None,
         ask=None,
-        data_type=None
+        data_type=None,
+        timestamp=None
     ):
 
-        # Không lưu nếu không có mã cổ phiếu
         if not symbol:
             return
 
-        timestamp = datetime.now().isoformat()
+        symbol = (
+            str(symbol)
+            .strip()
+            .upper()
+        )
 
-        record = {
-            "symbol": symbol,
-            "price": price,
-            "volume": volume,
-            "bid": bid,
-            "ask": ask,
-            "data_type": data_type,
-            "timestamp": timestamp
-        }
+        if not symbol:
+            return
+
+        if timestamp is None:
+
+            timestamp = (
+                datetime.now().isoformat()
+            )
 
         with self.lock:
 
-            # Cập nhật dữ liệu mới nhất trong RAM
+            # ---------------------------------------------
+            # Lấy dữ liệu cũ
+            # ---------------------------------------------
+
+            old_record = (
+                self.latest.get(symbol)
+            )
+
+            # ---------------------------------------------
+            # Nếu đã có dữ liệu cũ
+            # thì chỉ cập nhật những trường được truyền vào
+            # ---------------------------------------------
+
+            if old_record is not None:
+
+                if price is None:
+                    price = old_record.get("price")
+
+                if volume is None:
+                    volume = old_record.get("volume")
+
+                if bid is None:
+                    bid = old_record.get("bid")
+
+                if ask is None:
+                    ask = old_record.get("ask")
+
+            # ---------------------------------------------
+            # Tạo record mới
+            # ---------------------------------------------
+
+            record = {
+
+                "symbol": symbol,
+
+                "price": price,
+
+                "volume": volume,
+
+                "bid": bid,
+
+                "ask": ask,
+
+                "data_type": data_type,
+
+                "timestamp": timestamp
+            }
+
+            # ---------------------------------------------
+            # Cập nhật cache
+            # ---------------------------------------------
+
             self.latest[symbol] = record
 
-            # Đưa dữ liệu vào hàng đợi
-            self.queue.append(record)
-
-    # =========================================================
-    # 3. GHI HÀNG ĐỢI XUỐNG SQLITE
-    # =========================================================
-
-    def flush(self):
-
-        with self.lock:
-
-            # Nếu không có dữ liệu thì không làm gì
-            if not self.queue:
-                return 0
-
-            # Lấy toàn bộ dữ liệu đang chờ
-            records = self.queue
-
-            # Tạo queue mới để tiếp tục nhận dữ liệu
-            self.queue = []
-
-            # Ghi nhiều bản ghi cùng lúc
-            self.cursor.executemany(
-                """
-                INSERT INTO market_data
-                (
-                    symbol,
-                    price,
-                    volume,
-                    bid,
-                    ask,
-                    data_type,
-                    timestamp
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        r["symbol"],
-                        r["price"],
-                        r["volume"],
-                        r["bid"],
-                        r["ask"],
-                        r["data_type"],
-                        r["timestamp"]
-                    )
-                    for r in records
-                ]
-            )
-
-            # Xác nhận giao dịch
-            self.conn.commit()
-
-            return len(records)
-
-    # =========================================================
-    # 4. TỰ ĐỘNG FLUSH MỖI 3 GIÂY
-    # =========================================================
-
-    def _auto_flush(self):
-
-        while self.flush_running:
-
-            # Chờ 3 giây
-            threading.Event().wait(
-                self.flush_interval
-            )
-
-            try:
-
-                # Ghi dữ liệu trong queue xuống SQLite
-                count = self.flush()
-
-                if count > 0:
-
-                    print(
-                        f"[STORE] Đã ghi "
-                        f"{count} bản ghi vào SQLite"
-                    )
-
-            except Exception as e:
-
-                # Không để lỗi SQLite
-                # làm chết thread
-                print(
-                    f"[STORE ERROR] "
-                    f"Lỗi ghi dữ liệu: {e}"
-                )
-
-    # =========================================================
-    # 5. LẤY GIÁ MỚI NHẤT CỦA 1 MÃ
-    # =========================================================
+    # =====================================================
+    # LẤY DỮ LIỆU MỚI NHẤT
+    # =====================================================
 
     def get_latest(self, symbol):
 
+        if not symbol:
+            return None
+
+        symbol = (
+            str(symbol)
+            .strip()
+            .upper()
+        )
+
         with self.lock:
 
-            return self.latest.get(symbol)
+            record = self.latest.get(
+                symbol
+            )
 
-    # =========================================================
-    # 6. LẤY GIÁ MỚI NHẤT CỦA TẤT CẢ MÃ
-    # =========================================================
+            if record is None:
+                return None
+
+            # Trả bản copy để bên ngoài
+            # không vô tình sửa cache
+            return record.copy()
+
+    # =====================================================
+    # LẤY TOÀN BỘ DỮ LIỆU MỚI NHẤT
+    # =====================================================
 
     def get_all_latest(self):
 
         with self.lock:
 
-            return self.latest.copy()
+            return {
+                symbol: record.copy()
+                for symbol, record
+                in self.latest.items()
+            }
 
-    # =========================================================
-    # 7. ĐÓNG DATABASE
-    # =========================================================
+    # =====================================================
+    # ĐẾM SỐ MÃ ĐANG CÓ DỮ LIỆU
+    # =====================================================
+
+    def count_latest(self):
+
+        with self.lock:
+
+            return len(
+                self.latest
+            )
+
+    # =====================================================
+    # ĐÓNG STORE
+    # =====================================================
 
     def close(self):
 
-        # Dừng thread tự động flush
-        self.flush_running = False
-
-        # Ghi nốt dữ liệu còn trong queue
-        self.flush()
-
-        # Đóng database
         with self.lock:
 
             self.conn.close()
 
-        print("[STORE] MarketStore đã đóng.")
+        print(
+            "[STORE] MarketStore đã đóng."
+        )
