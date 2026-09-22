@@ -23,15 +23,19 @@ jobs:
       - name: Cài đặt các thư viện cần thiết
         run: |
           python -m pip install --upgrade pip
-          pip install pandas vnstock
+          pip install pandas vnstock requests vnfinancialdata
 
-      - name: Chạy script cào dữ liệu BCTC
+      - name: Chạy script cào dữ liệu BCTC chính
         run: |
           python data/fetcher_financial.py
+
+      - name: Bổ sung chỉ số Free Float chuẩn xác từ KBS
+        run: |
+          python data/patch_free_float.py
 
       - name: Tự động Commit và Push file JSON mới lên Repo
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/financial_data.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(data): auto-update financial_data.json [skip ci]" && git push)
+          git add data/financial_data.json data/fa_diagnostics.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(data): auto-update financial and free float data [skip ci]" && git push)
