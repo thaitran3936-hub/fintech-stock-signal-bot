@@ -37,7 +37,7 @@ jobs:
       # 4. Chạy cập nhật dữ liệu lịch sử
       - name: Update historical data
         run: |
-          python stock_bot/data_pipeline/update_history.py
+          python -m stock_bot.data_pipeline.update_history
 
       # 5. Kiểm tra database
       - name: Check database
